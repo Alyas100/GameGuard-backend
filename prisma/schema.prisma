@@ -1,0 +1,52 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ALL MODEL HERE----
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String?
+  reports   Report[]  // one game have many reports
+  createdAt DateTime  @default(now())
+}
+
+// --later add other field that required such as riskScore, Islamic rating, cultural rating, etc.
+model Game {
+  id          Int       @id @default(autoincrement())
+  name        String     @unique
+  platform    String?    // PC, Mobile, Console
+  genre       String?
+  riskScore   Float?     // Optional - for later AI analysis
+  reports     Report[]   // one-to-many relation 
+  createdAt   DateTime   @default(now())
+}
+
+model Report {
+  id          Int       @id @default(autoincrement())
+  description String
+  imageUrl    String?
+  platform    String?
+  createdAt   DateTime   @default(now())
+  selectedDate DateTime?  // the date when the report event happened
+  categories   Json?      // stores array of categories
+
+  // Relations
+  game        Game?      @relation(fields: [gameId], references: [id])
+  gameId      Int?        // each Report belongs to ONE Game (many diffrent 'Report' object can be linked to one game id (same id))
+  user        User?      @relation(fields: [userId], references: [id])
+  userId      Int?
+}
+
