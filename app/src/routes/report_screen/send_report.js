@@ -1,14 +1,22 @@
 // backend/index.js
 import express from "express";
+import fs from "fs";
 import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
 import prisma from "../../../../prismaClient.js";
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.resolve(__dirname, "../../../../uploads");
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // save files to uploads/
+    // Always write to backend/uploads regardless of process cwd.
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname); // unique filename
@@ -17,63 +25,54 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Parse multipart/form-data with single file 'screenshot'
+// Parse multipart/form-data with single file 'screenshot'
 router.post("/", upload.single("screenshot"), async (req, res) => {
   try {
-    // Extract all fields from req.body
+    // --- FIX 1: Destructure the NEW fields from req.body ---
+    // Your frontend now sends 'gameId' or 'gameName'
     const {
-      game,
+      gameId,
+      gameName, // <-- This is what was missing
       platform,
       description,
       agreedToTerms,
       selectedDate,
-      categories, // <-- make sure this key matches what frontend appends
-    } = req.body;
+      categories,
+    } = req.body; // --- FIX 2: Parse all fields correctly ---
 
-    // Parse categories if it was sent as a JSON string
-    const parsedCategories = categories ? JSON.parse(categories) : [];
-
-    // Convert selectedDate to JS Date object
+    const parsedCategories = categories ? JSON.parse(categories) : {}; // Default to object
+    const parsedPlatforms = platform ? JSON.parse(platform) : []; // Default to array
     const reportDate = selectedDate ? new Date(selectedDate) : null;
-
-    // Build image URL path
-    const imageUrl = req.file ? req.file.path : null;
-
-    // convert the string into id
-    const gameId = game ? parseInt(game) : undefined;
+    const imageUrl = req.file ? `uploads/${req.file.filename}` : null;
+    const parsedGameId = gameId ? parseInt(gameId) : undefined; // Use the gameId from frontend // --- This console.log will now work ---
 
     console.log("🧾 Report Data:");
     console.log({
-      game,
-      platform,
-      description,
-      agreedToTerms,
-      selectedDate,
+      parsedGameId,
+      gameName,
+      platform: parsedPlatforms,
       categories: parsedCategories,
     });
 
-    // req.file contains the uploaded image info
-    console.log("🖼️ Screenshot file:", req.file);
+    console.log("🖼️ Screenshot file:", req.file); // --- FIX 3: Save to Prisma DB (Removed duplicates) ---
 
-    // Save to Prisma DB
     const newReport = await prisma.report.create({
       data: {
         description,
-        platform,
+        platform: parsedPlatforms,
         imageUrl,
         selectedDate: reportDate,
-        categories: parsedCategories,
-        game: gameId ? { connect: { id: gameId } } : undefined,
-        // user: userId ? { connect: { id: parseInt(userId) } } : undefined,  <- UNCOMMENT THIS LATER WHEN HAVE ACTUAL USER THAT SEND IT
+        categories: parsedCategories, // This correctly links the report to the game ID
+
+        game: parsedGameId ? { connect: { id: parsedGameId } } : undefined,
       },
     });
 
     console.log("✅ Saved report to DB:", newReport);
-
     res.json({ success: true, report: newReport });
   } catch (err) {
     console.error("❌ Error saving report:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 export default router;

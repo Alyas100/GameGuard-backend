@@ -19,34 +19,103 @@ model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique
   name      String?
+  password  String
   reports   Report[]  // one game have many reports
   createdAt DateTime  @default(now())
+  keyConcerns Json?    
+  children    Child[]  // allow parent to have one or more child profile
+  countryCode String? // Stores the 2-letter ISO code (e.g., 'MY', 'US') for personalization
+
 }
 
 // --later add other field that required such as riskScore, Islamic rating, cultural rating, etc.
 model Game {
   id          Int       @id @default(autoincrement())
   name        String     @unique
-  platform    String?    // PC, Mobile, Console
+  platform    String[]    // PC, Mobile, Console
   genre       String?
+  imageUrl    String?
+  ageRating   String?
   riskScore   Float?     // Optional - for later AI analysis
+  releaseDate DateTime? 
+  description String?     // Full description from API
+  shortDescription String? // AI-summarized description for frontend display
   reports     Report[]   // one-to-many relation 
   createdAt   DateTime   @default(now())
+  // This links the game to all the children who monitor it
+  monitoredBy Child[] @relation("MonitoredGames")
+  screenTimeLogs ScreenTimeLog[]
 }
 
 model Report {
   id          Int       @id @default(autoincrement())
   description String
   imageUrl    String?
-  platform    String?
+  platform    String[]
   createdAt   DateTime   @default(now())
   selectedDate DateTime?  // the date when the report event happened
   categories   Json?      // stores array of categories
+
+  // to track which reports the ai has already processed
+  isScored     Boolean  @default(false)
 
   // Relations
   game        Game?      @relation(fields: [gameId], references: [id])
   gameId      Int?        // each Report belongs to ONE Game (many diffrent 'Report' object can be linked to one game id (same id))
   user        User?      @relation(fields: [userId], references: [id])
   userId      Int?
+}
+
+model Child {
+  id        Int      @id @default(autoincrement())
+  childName String   // Changed from 'name'
+  age       Int      // Changed from 'ageRange' String
+
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+
+  monitoredGames Game[] @relation("MonitoredGames")
+  activitySessions MonitoringSession[] 
+
+  // Device linking (KEEP ALL - ALREADY PERFECT!)
+  deviceId              String?   @unique
+  isLinked              Boolean   @default(false)
+  linkedAt              DateTime?
+  linkedDeviceType      String?
+  linkedDeviceModel     String?
+  screenTimeLogs ScreenTimeLog[]
+  dailyScreenTimeLimitMinutes Int @default(120)
+}
+
+// --- NEW MODEL: LIVE ACTIVITY LOG ---
+model MonitoringSession {
+  id               Int       @id @default(autoincrement())
+  
+  // Data identifying the activity
+  gameName         String
+  packageName      String?     // e.g., 'com.roblox.client'
+  deviceType       String?
+  deviceId         String    
+  riskLevel        String    // e.g., 'medium', 'high'
+  
+  // Time data
+  startTime        DateTime  
+  durationSeconds  Int       // Duration of the session
+  
+  // Relation to the Child who generated the activity
+  child            Child     @relation(fields: [childId], references: [id])
+  childId          Int
+}
+
+model ScreenTimeLog {
+  id              Int      @id @default(autoincrement())
+  childId         Int
+  gameId          Int
+  durationMinutes Int
+  logDate         DateTime
+  createdAt       DateTime @default(now())
+  
+  child Child @relation(fields: [childId], references: [id])
+  game  Game  @relation(fields: [gameId], references: [id])
 }
 
