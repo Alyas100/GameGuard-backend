@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15
+    container_name: gameguard
+    environment:
+      POSTGRES_USER: gameguard_user
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: gameguard_db
+    volumes:
+      - gameguard-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: .
+    container_name: gameguard-backend
+    environment:
+      - DATABASE_URL=postgresql://gameguard_user:change_me@db:5432/gameguard_db
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    volumes:
+      - ./:/usr/src/app
+
+volumes:
+  gameguard-data:
